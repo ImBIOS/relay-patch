@@ -1,7 +1,17 @@
 {
   "name": "relay-patch",
-  "module": "index.ts",
+  "version": "0.1.0",
+  "module": "src/cli.ts",
   "type": "module",
+  "bin": {
+    "relay-patch": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "update": "bun run src/cli.ts update",
+    "rollback": "bun run src/cli.ts rollback",
+    "status": "bun run src/cli.ts status"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
