@@ -1,22 +1,28 @@
 import { runUpdate, type UpdateOptions } from "./update";
 import { runRollback } from "./rollback";
+import { runInit } from "./init";
+import { runDraft } from "./draft";
+import { runSatisfied } from "./satisfied";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
 Usage:
-  relay-patch update [--tag <tag>] [--dry-run] [--skip-install]
-                                    Update to latest (or specified) tag
-  relay-patch rollback              Roll back to the previous tag
-  relay-patch status                Show current state
-  relay-patch --help                Show this help
+  relay-patch init [--upstream-remote <name>]   Set up .relay-patch repo
+  relay-patch draft "<intent>"                  Create a draft branch for a new patch
+  relay-patch satisfied [--skip-port]           Finalize intent, port to relay-patch/main
+  relay-patch update [--tag <tag>] [--dry-run]  Update to latest (or specified) tag
+  relay-patch rollback                          Roll back to the previous tag
+  relay-patch status                            Show current state
+  relay-patch --help                            Show this help
 
-Run from within your fork's checkout directory. Tags should follow the
-\`v<upstream>-rp<build>\` convention (e.g., v2.1.0-rp1).
+Producer commands (init, draft, satisfied) run from inside your fork's checkout.
+Consumer commands (update, rollback, status) also run from the fork checkout.
 `;
 
-function parseArgs(argv: string[]): { command?: string; opts: Record<string, string | boolean> } {
+function parseArgs(argv: string[]): { command?: string; opts: Record<string, string | boolean>; positional: string[] } {
   const [command, ...rest] = argv;
   const opts: Record<string, string | boolean> = {};
+  const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
     if (arg && arg.startsWith("--")) {
@@ -28,17 +34,15 @@ function parseArgs(argv: string[]): { command?: string; opts: Record<string, str
       } else {
         opts[key] = true;
       }
+    } else if (arg) {
+      positional.push(arg);
     }
   }
-  return { command, opts };
-}
-
-function shortSha(sha: string): string {
-  return sha.slice(0, 7);
+  return { command, opts, positional };
 }
 
 async function runStatus() {
-  const { isGitRepo, currentSha, currentTag, listTags } = await import("./update");
+  const { isGitRepo, currentSha, currentTag, listTags } = await import("./git");
   if (!(await isGitRepo())) {
     console.error("Not a git repository.");
     process.exit(1);
@@ -47,10 +51,10 @@ async function runStatus() {
   const tag = await currentTag();
   const tags = await listTags();
 
-  console.log(`Current:  ${tag ?? "(detached)"} ${shortSha(sha)}`);
+  console.log(`Current:  ${tag ?? "(detached)"} ${sha.slice(0, 7)}`);
   const latest = tags[0];
   if (latest) {
-    console.log(`Latest:   ${latest.name} ${shortSha(latest.sha)}`);
+    console.log(`Latest:   ${latest.name} ${latest.sha.slice(0, 7)}`);
     if (latest.sha !== sha) {
       console.log(`\nRun \`relay-patch update\` to advance.`);
     } else {
@@ -62,7 +66,7 @@ async function runStatus() {
 }
 
 async function main() {
-  const { command, opts } = parseArgs(process.argv.slice(2));
+  const { command, opts, positional } = parseArgs(process.argv.slice(2));
 
   if (!command || command === "--help" || command === "-h") {
     console.log(HELP);
@@ -71,6 +75,52 @@ async function main() {
 
   try {
     switch (command) {
+      case "init": {
+        const initOpts: { upstreamRemote?: string; target?: string } = {};
+        if (typeof opts["upstream-remote"] === "string") initOpts.upstreamRemote = opts["upstream-remote"];
+        if (typeof opts.target === "string") initOpts.target = opts.target;
+
+        const result = await runInit(initOpts);
+        console.log(`Target repo:     ${result.targetRepo}`);
+        console.log(`Upstream remote: ${result.upstreamRemote} (${result.upstreamUrl})`);
+        console.log(`.relay-patch:    ${result.relayPatchDir}`);
+        console.log(result.created ? "Created new .relay-patch repo." : "Existing .relay-patch repo configured.");
+        break;
+      }
+
+      case "draft": {
+        const intent = positional.join(" ");
+        if (!intent) {
+          throw new Error("Intent description required. Usage: relay-patch draft \"<intent>\"");
+        }
+        const result = await runDraft(intent);
+        console.log(`Branch:    ${result.branch}`);
+        console.log(`Slug:      ${result.slug}`);
+        console.log(`Base:      ${result.baseSha.slice(0, 7)}`);
+        console.log(`Draft:     ${result.draftFile}`);
+        console.log(`\nImplement your patch on branch '${result.branch}'.`);
+        console.log(`When done, run: relay-patch satisfied`);
+        break;
+      }
+
+      case "satisfied": {
+        const satisfiedOpts: { skipPort?: boolean } = {};
+        if (opts["skip-port"] === true) satisfiedOpts.skipPort = true;
+
+        const result = await runSatisfied(satisfiedOpts);
+        console.log(`Patch ID:       ${result.patchId}`);
+        console.log(`Branch:         ${result.branch}`);
+        console.log(`Files changed:  ${result.filesChanged.join(", ") || "(none)"}`);
+        if (result.relayPatchMainUpdated) {
+          console.log(`Ported to:      relay-patch/main`);
+          if (result.tag) console.log(`Tag:            ${result.tag}`);
+        } else {
+          console.log(`Port:           skipped`);
+        }
+        console.log(`\nIntent saved to .relay-patch.`);
+        break;
+      }
+
       case "update": {
         const updateOpts: UpdateOptions = {};
         if (typeof opts.tag === "string") updateOpts.tag = opts.tag;
@@ -80,16 +130,16 @@ async function main() {
         const result = await runUpdate(updateOpts);
 
         if (result.skipped) {
-          console.log(`Already at ${result.to} (${shortSha(result.from)}). Nothing to do.`);
+          console.log(`Already at ${result.to} (${result.from.slice(0, 7)}). Nothing to do.`);
           return;
         }
 
         if (opts["dry-run"]) {
-          console.log(`[dry-run] Would update ${shortSha(result.from)} → ${result.to} (${shortSha(result.toSha)})`);
+          console.log(`[dry-run] Would update ${result.from.slice(0, 7)} → ${result.to} (${result.toSha.slice(0, 7)})`);
           return;
         }
 
-        console.log(`Updated ${shortSha(result.from)} → ${result.to} (${shortSha(result.toSha)})`);
+        console.log(`Updated ${result.from.slice(0, 7)} → ${result.to} (${result.toSha.slice(0, 7)})`);
         if (result.stashed) {
           if (result.stashRestored) {
             console.log(`Local changes restored from stash.`);
@@ -109,7 +159,7 @@ async function main() {
         if (result.skipped) {
           console.log(`Already at ${result.to}. Nothing to do.`);
         } else {
-          console.log(`Rolled back ${result.from} → ${result.to} (${shortSha(result.toSha)})`);
+          console.log(`Rolled back ${result.from} → ${result.to} (${result.toSha.slice(0, 7)})`);
         }
         break;
       }
