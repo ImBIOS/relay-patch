@@ -5,6 +5,8 @@ import { runDraft } from "./draft";
 import { runSatisfied } from "./satisfied";
 import { runDriftCheck, formatDriftCheckResult } from "./drift-check";
 import { runImport } from "./import";
+import { runReDerive } from "./re-derive";
+import { runApply } from "./apply";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
@@ -13,6 +15,8 @@ Usage:
   relay-patch draft "<intent>"                    Create a draft branch for a new patch
   relay-patch satisfied [--skip-port]             Finalize intent, port to relay-patch/main
   relay-patch import <url> [--force]              Import a patch from another user's .relay-patch
+  relay-patch re-derive <patch-id> [--force]      Generate re-derivation context bundle
+  relay-patch apply <bundle-path>                 Apply realization from context bundle
   relay-patch drift-check                         Check if patches need re-derivation
   relay-patch update [--tag <tag>] [--dry-run]    Update to latest (or specified) tag
   relay-patch rollback                            Roll back to the previous tag
@@ -193,6 +197,55 @@ async function main() {
         console.log(`Author:       ${result.author}`);
         console.log(`Files:        ${result.filesImported.join(", ")}`);
         console.log(`\nPatch imported. Run \`relay-patch drift-check\` to see if re-derivation is needed.`);
+        break;
+      }
+
+      case "re-derive": {
+        const patchId = positional[0];
+        if (!patchId) {
+          throw new Error("Patch ID required. Usage: relay-patch re-derive <patch-id>");
+        }
+        const reDeriveOpts: { force?: boolean } = {};
+        if (opts.force === true) reDeriveOpts.force = true;
+
+        const result = await runReDerive(patchId, reDeriveOpts);
+        if (result.status === "current" && !opts.force) {
+          console.log(`Patch ${result.patchId} is already current. No re-derivation needed.`);
+          console.log(`Use --force to re-derive anyway.`);
+          break;
+        }
+        console.log(`Patch ID:    ${result.patchId}`);
+        console.log(`Bundle:      ${result.bundlePath}`);
+        console.log(`Status:      ${result.status}`);
+        console.log(`\nBundle contents (${result.filesInBundle.length} files):`);
+        for (const f of result.filesInBundle) {
+          console.log(`  - ${f}`);
+        }
+        console.log(`\nNext steps:`);
+        console.log(`  1. Have an AI agent re-derive the patch and save to REALIZATION/realization.diff`);
+        console.log(`  2. Run: relay-patch apply ${result.bundlePath}`);
+        break;
+      }
+
+      case "apply": {
+        const bundlePath = positional[0];
+        if (!bundlePath) {
+          throw new Error("Bundle path required. Usage: relay-patch apply <bundle-path>");
+        }
+        const applyOpts: { skipTests?: boolean; skipTag?: boolean } = {};
+        if (opts["skip-tests"] === true) applyOpts.skipTests = true;
+        if (opts["skip-tag"] === true) applyOpts.skipTag = true;
+
+        const result = await runApply(bundlePath, applyOpts);
+        console.log(`Patch ID:    ${result.patchId}`);
+        console.log(`Bundle:      ${result.bundlePath}`);
+        console.log(`Diff applied: ${result.diffApplied ? "yes" : "no"}`);
+        console.log(`Tests pass:   ${result.testsPass ? "yes" : "no"}`);
+        if (result.tag) console.log(`Tag:          ${result.tag}`);
+        if (result.errors.length > 0) {
+          console.log(`\nErrors:`);
+          for (const err of result.errors) console.log(`  - ${err}`);
+        }
         break;
       }
 
