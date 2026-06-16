@@ -82,6 +82,17 @@ ${intent}
 
   await Bun.write(draftPath, draftContent);
 
+  const gitignorePath = join(process.cwd(), ".gitignore");
+  const { existsSync: existsSyncSync } = await import("node:fs");
+  let gitignore = "";
+  if (existsSyncSync(gitignorePath)) {
+    gitignore = await Bun.file(gitignorePath).text();
+  }
+  if (!gitignore.includes(DRAFT_FILE)) {
+    gitignore = gitignore.trimEnd() + "\n" + (gitignore.length > 0 ? "\n" : "") + "# relay-patch draft\n" + DRAFT_FILE + "\n";
+    await Bun.write(gitignorePath, gitignore);
+  }
+
   return {
     branch: branchName,
     slug,

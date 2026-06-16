@@ -3,19 +3,21 @@ import { runRollback } from "./rollback";
 import { runInit } from "./init";
 import { runDraft } from "./draft";
 import { runSatisfied } from "./satisfied";
+import { runDriftCheck, formatDriftCheckResult } from "./drift-check";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
 Usage:
-  relay-patch init [--upstream-remote <name>]   Set up .relay-patch repo
-  relay-patch draft "<intent>"                  Create a draft branch for a new patch
-  relay-patch satisfied [--skip-port]           Finalize intent, port to relay-patch/main
-  relay-patch update [--tag <tag>] [--dry-run]  Update to latest (or specified) tag
-  relay-patch rollback                          Roll back to the previous tag
-  relay-patch status                            Show current state
-  relay-patch --help                            Show this help
+  relay-patch init [--target <repo>]              Set up .relay-patch repo
+  relay-patch draft "<intent>"                    Create a draft branch for a new patch
+  relay-patch satisfied [--skip-port]             Finalize intent, port to relay-patch/main
+  relay-patch drift-check                         Check if patches need re-derivation
+  relay-patch update [--tag <tag>] [--dry-run]    Update to latest (or specified) tag
+  relay-patch rollback                            Roll back to the previous tag
+  relay-patch status                              Show current state
+  relay-patch --help                              Show this help
 
-Producer commands (init, draft, satisfied) run from inside your fork's checkout.
+Producer commands (init, draft, satisfied, drift-check) run from inside your fork.
 Consumer commands (update, rollback, status) also run from the fork checkout.
 `;
 
@@ -166,6 +168,12 @@ async function main() {
 
       case "status": {
         await runStatus();
+        break;
+      }
+
+      case "drift-check": {
+        const result = await runDriftCheck();
+        console.log(formatDriftCheckResult(result));
         break;
       }
 
