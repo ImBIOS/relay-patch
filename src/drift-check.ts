@@ -128,7 +128,7 @@ export async function runDriftCheck(options: DriftCheckOptions = {}): Promise<Dr
 
   for (const patchId of patchIds) {
     const patchInfo = manifest.patches[patchId];
-    const lastRealizedSha = patchInfo.last_realized_against_commit ?? lastKnownSha;
+    const lastRealizedSha = patchInfo.last_realized_against_commit;
     const targetArea = readIntentTargetArea(repoDir, patchId);
 
     let status: PatchDriftStatus["status"] = "unknown";
@@ -136,7 +136,12 @@ export async function runDriftCheck(options: DriftCheckOptions = {}): Promise<Dr
     let targetAreaChanged = false;
     let filesChangedInTargetArea: string[] = [];
 
-    if (shortSha(lastRealizedSha) === shortSha(upstreamSha)) {
+    if (!lastRealizedSha) {
+      status = "drifted";
+      upstreamChanged = true;
+      targetAreaChanged = true;
+      filesChangedInTargetArea = ["(imported — needs first realization)"];
+    } else if (shortSha(lastRealizedSha) === shortSha(upstreamSha)) {
       status = "current";
     } else {
       upstreamChanged = true;
@@ -203,7 +208,7 @@ export function formatDriftCheckResult(result: DriftCheckResult): string {
     const icon = patch.status === "current" ? "✓" : patch.status === "drifted" ? "⚠" : "?";
     lines.push(`${icon} ${patch.patchId}`);
     lines.push(`   status:     ${patch.status}`);
-    lines.push(`   realized:   ${shortSha(patch.lastRealizedSha)}`);
+    lines.push(`   realized:   ${patch.lastRealizedSha ? shortSha(patch.lastRealizedSha) : "(not yet realized)"}`);
     lines.push(`   target_area: [${patch.targetArea.join(", ")}]`);
 
     if (patch.status === "drifted") {

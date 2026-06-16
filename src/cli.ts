@@ -4,6 +4,7 @@ import { runInit } from "./init";
 import { runDraft } from "./draft";
 import { runSatisfied } from "./satisfied";
 import { runDriftCheck, formatDriftCheckResult } from "./drift-check";
+import { runImport } from "./import";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
@@ -11,13 +12,14 @@ Usage:
   relay-patch init [--target <repo>]              Set up .relay-patch repo
   relay-patch draft "<intent>"                    Create a draft branch for a new patch
   relay-patch satisfied [--skip-port]             Finalize intent, port to relay-patch/main
+  relay-patch import <url> [--force]              Import a patch from another user's .relay-patch
   relay-patch drift-check                         Check if patches need re-derivation
   relay-patch update [--tag <tag>] [--dry-run]    Update to latest (or specified) tag
   relay-patch rollback                            Roll back to the previous tag
   relay-patch status                              Show current state
   relay-patch --help                              Show this help
 
-Producer commands (init, draft, satisfied, drift-check) run from inside your fork.
+Producer commands run from inside your fork's checkout.
 Consumer commands (update, rollback, status) also run from the fork checkout.
 `;
 
@@ -174,6 +176,23 @@ async function main() {
       case "drift-check": {
         const result = await runDriftCheck();
         console.log(formatDriftCheckResult(result));
+        break;
+      }
+
+      case "import": {
+        const source = positional.join(" ");
+        if (!source) {
+          throw new Error("Source URL required. Usage: relay-patch import <github-url>");
+        }
+        const importOpts: { force?: boolean } = {};
+        if (opts.force === true) importOpts.force = true;
+
+        const result = await runImport(source, importOpts);
+        console.log(`Patch ID:     ${result.patchId}`);
+        console.log(`Target repo:  ${result.targetRepo}`);
+        console.log(`Author:       ${result.author}`);
+        console.log(`Files:        ${result.filesImported.join(", ")}`);
+        console.log(`\nPatch imported. Run \`relay-patch drift-check\` to see if re-derivation is needed.`);
         break;
       }
 
