@@ -58,6 +58,7 @@ jobs:
         run: |
           pnpm publish \
             --provenance \
+            --no-git-checks \
             --access public \
             --registry "https://npm.pkg.github.com"
         env:
