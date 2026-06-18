@@ -7,6 +7,7 @@ import { runDriftCheck, formatDriftCheckResult } from "./drift-check";
 import { runImport } from "./import";
 import { runReDerive } from "./re-derive";
 import { runApply } from "./apply";
+import { runWatch } from "./watch";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
@@ -18,6 +19,7 @@ Usage:
   relay-patch re-derive <patch-id> [--force]      Generate re-derivation context bundle
   relay-patch apply <bundle-path>                 Apply realization from context bundle
   relay-patch drift-check                         Check if patches need re-derivation
+  relay-patch watch [--once] [--interval <sec>]   Daemon: auto-detect drift + generate bundles
   relay-patch update [--tag <tag>] [--dry-run]    Update to latest (or specified) tag
   relay-patch rollback                            Roll back to the previous tag
   relay-patch status                              Show current state

@@ -209,6 +209,12 @@ bun test
 `,
   );
 
+  const { generateVerifySh } = await import("./verify");
+  await Bun.write(
+    join(patchDir, "verify.sh"),
+    generateVerifySh("bun test", patchId),
+  );
+
   const manifestPath = join(repoDir, "manifest.json");
   const manifest = JSON.parse(await Bun.file(manifestPath).text());
   manifest.patches[patchId] = {

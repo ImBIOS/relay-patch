@@ -107,12 +107,42 @@ export async function runApply(bundlePath: string, options: ApplyOptions = {}): 
     }
     diffApplied = true;
 
-    if (!options.skipTests && verifyCommand) {
-      testsPass = await runVerificationCommand(verifyCommand, process.cwd());
-      if (!testsPass) {
-        errors.push(`Verification command failed: ${verifyCommand}`);
-        await gitExec(["apply", "-R", realizationDiffPath]);
-        return { bundlePath, patchId, diffApplied: false, testsPass, tag, errors };
+    if (!options.skipTests) {
+      const relayPatchDir = options.relayPatchDir ?? join(process.cwd(), "..", ".relay-patch");
+      let patchDir: string | null = null;
+      const { existsSync: exists, readdirSync, statSync } = await import("node:fs");
+      function findPatch(dir: string, targetId: string): string | null {
+        if (!exists(dir)) return null;
+        for (const entry of readdirSync(dir)) {
+          const full = join(dir, entry);
+          if (statSync(full).isDirectory()) {
+            if (entry === targetId) return full;
+            const sub = findPatch(full, targetId);
+            if (sub) return sub;
+          }
+        }
+        return null;
+      }
+      patchDir = findPatch(join(relayPatchDir, "repos"), patchId);
+
+      if (patchDir) {
+        const { runVerify } = await import("./verify");
+        const verifyResult = await runVerify(patchDir, process.cwd());
+        testsPass = verifyResult.passed;
+        if (!testsPass) {
+          errors.push(`Verification failed:\n${verifyResult.output}`);
+          await gitExec(["apply", "-R", realizationDiffPath]);
+          return { bundlePath, patchId, diffApplied: false, testsPass, tag, errors };
+        }
+      } else if (verifyCommand) {
+        testsPass = await runVerificationCommand(verifyCommand, process.cwd());
+        if (!testsPass) {
+          errors.push(`Verification command failed: ${verifyCommand}`);
+          await gitExec(["apply", "-R", realizationDiffPath]);
+          return { bundlePath, patchId, diffApplied: false, testsPass, tag, errors };
+        }
+      } else {
+        testsPass = true;
       }
     } else {
       testsPass = true;
