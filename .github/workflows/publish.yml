@@ -34,7 +34,7 @@ jobs:
         run: echo "no build step (PNPM runs TypeScript directly)"
 
       - name: Publish to npm (trusted publisher, OIDC)
-        run: npm publish --access public
+        run: npm publish --access public --provenance=true
         env:
           NPM_CONFIG_PROVENANCE: true
 
@@ -43,6 +43,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # Required for provenance in GitHub Actions
     steps:
       - uses: actions/checkout@v6
 
