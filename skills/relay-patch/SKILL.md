@@ -67,6 +67,23 @@ bun run <relay-patch-cli> satisfied
 
 This finalizes the intent, captures the diff, ports to `relay-patch/main`, and tags.
 
+### Step 6c: Open PR upstream (fork workflows only)
+
+If the user wants to also contribute the patch back to the original repo (the
+fork workflow), and the local clone is set up as a fork with separate
+`upstream` and `origin` remotes:
+
+```bash
+bun run <relay-patch-cli> pr --draft
+```
+
+This pushes the current branch to `origin` (your fork) and opens a draft PR
+against `upstream` via `gh pr create`. The PR URL and number are saved into
+the manifest under `patches[<patch-id>].applied_upstream_pr`.
+
+Skip this step if the user doesn't want to contribute upstream, or if the
+local repo isn't a fork (single-remote setup).
+
 ### Step 6b: Not satisfied
 
 If the user wants changes:
@@ -205,9 +222,10 @@ relay-patch <command>
 
 | Command | Purpose |
 |---|---|
-| `init [--target <repo>]` | Set up .relay-patch repo |
+| `init [--target <repo>]` | Set up .relay-patch repo (auto-detects fork vs single-remote) |
 | `draft "<intent>"` | Create draft branch |
 | `satisfied [--skip-port]` | Finalize intent, port, tag |
+| `pr [--draft] [--base <branch>]` | Push current branch to fork + open PR to upstream (fork only) |
 | `status` | Show current tag state |
 | `update [--tag <tag>]` | Consumer: advance to tag |
 | `rollback` | Consumer: roll back |

@@ -228,6 +228,7 @@ bun test
     version: 1,
     author: username,
     last_modified_by: username,
+    branch,
     last_realized_against_commit: shortSha(upstreamSha),
   };
   manifest.apply_order.push(patchId);

@@ -10,6 +10,7 @@ import { runReDerive } from "./re-derive";
 import { runApply } from "./apply";
 import { runWatch } from "./watch";
 import { runSearch, formatSearchResults } from "./search";
+import { runPr } from "./pr";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
@@ -17,8 +18,9 @@ Usage:
   relay-patch init [--target <repo>]              Set up .relay-patch repo
   relay-patch draft "<intent>"                    Create a draft branch for a new patch
   relay-patch satisfied [--skip-port]             Finalize intent, port to relay-patch/main
+  relay-patch pr [--draft] [--base <branch>]      Push current branch + open PR to upstream
   relay-patch import <url> [--force]              Import a patch from another user's .relay-patch
-  relay-patch search [query] [--target <repo>]     Search GitHub for patches
+  relay-patch search [query] [--target <repo>]    Search GitHub for patches
   relay-patch re-derive <patch-id> [--force]      Generate re-derivation context bundle
   relay-patch apply <bundle-path>                 Apply realization from context bundle
   relay-patch drift-check                         Check if patches need re-derivation
@@ -31,6 +33,7 @@ Usage:
 
 Producer commands run from inside your fork's checkout.
 Consumer commands (update, rollback, status) also run from the fork checkout.
+The \`pr\` command requires a fork setup (separate \`upstream\` and \`origin\` remotes).
 `;
 
 function parseArgs(argv: string[]): { command?: string; opts: Record<string, string | boolean>; positional: string[] } {
@@ -90,13 +93,20 @@ async function main() {
   try {
     switch (command) {
       case "init": {
-        const initOpts: { upstreamRemote?: string; target?: string } = {};
+        const initOpts: { upstreamRemote?: string; forkRemote?: string; target?: string } = {};
         if (typeof opts["upstream-remote"] === "string") initOpts.upstreamRemote = opts["upstream-remote"];
+        if (typeof opts["fork-remote"] === "string") initOpts.forkRemote = opts["fork-remote"];
         if (typeof opts.target === "string") initOpts.target = opts.target;
 
         const result = await runInit(initOpts);
         console.log(`Target repo:     ${result.targetRepo}`);
         console.log(`Upstream remote: ${result.upstreamRemote} (${result.upstreamUrl})`);
+        if (result.isFork && result.forkRemote) {
+          console.log(`Fork remote:     ${result.forkRemote} (${result.forkUrl})`);
+          console.log(`Setup:           FORK — track drift on upstream, push PRs from ${result.forkRemote}`);
+        } else {
+          console.log(`Setup:           SINGLE-REMOTE — no fork detected`);
+        }
         console.log(`.relay-patch:    ${result.relayPatchDir}`);
         console.log(result.created ? "Created new .relay-patch repo." : "Existing .relay-patch repo configured.");
         break;
@@ -272,6 +282,30 @@ async function main() {
         if (result.errors.length > 0) {
           console.log(`\nErrors:`);
           for (const err of result.errors) console.log(`  - ${err}`);
+        }
+        break;
+      }
+
+      case "pr": {
+        const prOpts: { draft?: boolean; base?: string; title?: string; body?: string; noPush?: boolean } = {};
+        if (opts.draft === true) prOpts.draft = true;
+        if (typeof opts.base === "string") prOpts.base = opts.base;
+        if (typeof opts.title === "string") prOpts.title = opts.title;
+        if (typeof opts.body === "string") prOpts.body = opts.body;
+        if (opts["no-push"] === true) prOpts.noPush = true;
+
+        const result = await runPr(prOpts);
+        console.log(`Branch:    ${result.branch}`);
+        console.log(`Pushed:    ${result.pushedTo}`);
+        if (result.prUrl) {
+          console.log(`PR:        ${result.prUrl}`);
+          console.log(`PR #:      ${result.prNumber}`);
+          console.log(`\nPR created/updated. Manifest updated.`);
+        } else if (result.error) {
+          console.error(`gh pr create failed: ${result.error}`);
+          console.error(`\nYou can still push the branch manually:`);
+          console.error(`  git push -u <fork-remote> ${result.branch}`);
+          console.error(`Then open the PR at: https://github.com/<owner>/<repo>/compare/${result.branch}`);
         }
         break;
       }
