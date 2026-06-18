@@ -32,8 +32,38 @@ The pain: every upstream release, manually re-apply, re-fix, re-test.
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
 ```bash
+brew tap ImBIOS/tap
+brew install relay-patch
+```
+
+### npm
+
+```bash
+npm install -g relay-patch
+# or
+bun add -g relay-patch
+# or
 npx relay-patch init
+```
+
+### Standalone binary
+
+```bash
+curl -fsSL https://github.com/ImBIOS/relay-patch/releases/latest/download/relay-patch-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') -o relay-patch
+chmod +x relay-patch
+sudo mv relay-patch /usr/local/bin/
+```
+
+### From source
+
+```bash
+git clone https://github.com/ImBIOS/relay-patch
+cd relay-patch
+bun install
+bun run build:binaries  # → ./dist/relay-patch-*
 ```
 
 Requires [Bun](https://bun.sh) ≥ 1.3 and `git`.
