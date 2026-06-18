@@ -109,6 +109,7 @@ echo "  patch implemented and committed"
 # === Finalize the patch ===
 echo ""
 echo "--- Step 4: relay-patch satisfied ---"
+cd $FORK
 bun /app/src/cli.ts satisfied 2>&1
 
 # === Simulate upstream advance ===

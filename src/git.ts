@@ -95,10 +95,12 @@ export async function listTags(pattern = "v*-rp*", cwd: string = process.cwd()):
 }
 
 export async function diff(from: string, to: string, cwd: string = process.cwd(), ...extraArgs: string[]): Promise<string> {
+  if (extraArgs[0] === "--") extraArgs.shift();
   return await gitOrThrow(["diff", `${from}..${to}`, ...extraArgs], cwd);
 }
 
 export async function diffNameOnly(from: string, to: string, cwd: string = process.cwd(), ...extraArgs: string[]): Promise<string[]> {
+  if (extraArgs[0] === "--") extraArgs.shift();
   const result = await gitOrThrow(["diff", "--name-only", `${from}..${to}`, ...extraArgs], cwd);
   return result ? result.split("\n").filter(Boolean) : [];
 }

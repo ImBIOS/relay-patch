@@ -185,6 +185,14 @@ async function main() {
         break;
       }
 
+      case "watch": {
+        const watchOpts: { once?: boolean; interval?: number } = {};
+        if (opts.once === true) watchOpts.once = true;
+        if (typeof opts.interval === "string") watchOpts.interval = parseInt(opts.interval, 10);
+        await runWatch(watchOpts);
+        break;
+      }
+
       case "import": {
         const source = positional.join(" ");
         if (!source) {

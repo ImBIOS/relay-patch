@@ -38,6 +38,7 @@ export async function runVerifyScript(
 
   for (let i = 0; i < commandLines.length; i++) {
     const command = commandLines[i];
+    if (!command) continue;
     const proc = Bun.spawn(["sh", "-c", command], {
       cwd,
       stdout: "pipe",

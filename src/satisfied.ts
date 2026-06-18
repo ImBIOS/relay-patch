@@ -126,7 +126,13 @@ export async function runSatisfied(options: SatisfiedOptions = {}): Promise<Sati
     gitOrThrow(["rev-parse", "main"]),
   );
   const filesChanged = await diffNameOnly(upstreamSha, "HEAD");
-  const realizationDiff = await diff(upstreamSha, "HEAD", "--", ".", ":(exclude).gitignore", ":(exclude).relay-patch-draft.md");
+  const realizationDiff = await diff(
+    upstreamSha,
+    "HEAD",
+    process.cwd(),
+    ":(exclude).gitignore",
+    ":(exclude).relay-patch-draft.md",
+  );
 
   const username = await gitOrThrow(["config", "user.name"]).catch(() => "unknown");
   const now = new Date().toISOString();

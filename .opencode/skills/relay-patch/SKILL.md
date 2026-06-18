@@ -7,6 +7,7 @@ Manage patches for forked repositories using intent-based re-derivation. Use whe
 ## When to Use
 
 - User says `/relay-patch "<intent>"` — create a new patch (DRAFTING)
+- User says `/relay-patch` (no args) — process pending re-derivation bundle
 - User says they're satisfied with a patch — finalize it
 - User wants to check if patches need re-derivation — drift-check
 - User wants to re-derive patches against new upstream
@@ -74,7 +75,69 @@ If the user wants changes:
 - Re-test
 - Ask again
 
-## RE-DERIVATION Flow
+## RE-DERIVATION Flow (`/relay-patch` with no args)
+
+When the user invokes `/relay-patch` with no arguments, check for pending
+re-derivation bundles. The `relay-patch watch` daemon generates these bundles
+when patches drift. Your job is to implement the patch and save the result.
+
+### Step 1: Find the latest pending bundle
+
+```bash
+# Find the most recent pending bundle
+LATEST_BUNDLE=$(find ../.relay-patch/derive -type d -mindepth 2 -maxdepth 2 2>/dev/null | sort | tail -1)
+
+# Check if it already has a realization (watch would have applied it)
+if [ -f "$LATEST_BUNDLE/REALIZATION/realization.diff" ]; then
+  echo "Bundle already has realization. Nothing to do."
+  exit 0
+fi
+```
+
+### Step 2: Read the bundle
+
+Read all files in the bundle:
+1. **README.md** — step-by-step instructions (authoritative)
+2. **INTENT.md** — source of truth (what to implement)
+3. **ACCEPTANCE.md** — verification criteria
+4. **drift-summary.txt** — what changed in upstream
+5. **reference.diff** — previous realization (HINT only)
+6. **attempts.jsonl** — past failures to avoid
+7. **siblings/** — other patches already applied (preserve their code)
+8. **upstream/** — clean upstream code
+9. **fork/** — current fork state (this is your working basis)
+
+### Step 3: Implement
+
+Implement the patch against the `fork/` files. Use the same constraints as
+DRAFTING (don't modify off-limits files, preserve siblings, etc.).
+
+### Step 4: Save realization
+
+Write a proper git diff to `REALIZATION/realization.diff`:
+
+```bash
+# Example: after editing fork/index.ts, generate the diff
+diff -u upstream/index.ts fork/index.ts > REALIZATION/realization.diff
+# OR: use git diff if fork/ is a git checkout
+```
+
+The diff format MUST be valid `git apply` format with proper `--- a/` and
+`+++ b/` headers and line numbers in hunk headers.
+
+### Step 5: Write report
+
+Write `REALIZATION/report.md` with:
+- What you changed (files, line numbers, approach)
+- Whether each acceptance criterion passes
+- Self-confidence (high/medium/low) and reasoning
+
+### Step 6: Notify
+
+The watch daemon will detect the realization and auto-apply it. The user will
+see "✅ Patch applied successfully" in the watch output.
+
+## RE-DERIVATION Flow (when run manually)
 
 When re-deriving a patch against new upstream (drift):
 
