@@ -1,78 +1,146 @@
 # relay-patch
 
-Keep up-to-date upstream + your custom patches. A workflow + tool for fork users
-who want both.
-
-## Status: v0.1.0 (prototype)
-
-The CLI prototype is functional but minimal. The full design is documented in
-`_local/`. Three end-to-end cold-start LLM tests have validated the core design:
-single-patch drift, multi-patch sibling awareness, and drift-with-siblings
-sequential re-derivation.
-
-## What it does
-
-`relay-patch` lets you maintain a fork of an upstream repo with your custom
-patches, where **patches are intent (not diffs)**. An AI agent re-derives
-your patches against every upstream release, so you stay up-to-date without
-losing your features.
-
-## For users (CLI)
-
-Run from within your fork's checkout directory:
+**Keep up-to-date upstream + your custom patches. Patches are intent, not diffs.**
 
 ```bash
-# See current state
-bun run src/cli.ts status
-
-# Update to the latest re-derivation
-bun run src/cli.ts update
-
-# Update to a specific version
-bun run src/cli.ts update --tag v2.1.0-rp1
-
-# Roll back to the previous version
-bun run src/cli.ts rollback
-
-# Show help
-bun run src/cli.ts --help
+$ npx relay-patch init
+$ relay-patch draft "add --cheat flag to reveal the secret"
+# ... AI implements, you test ...
+$ relay-patch satisfied
+$ relay-patch update  # when upstream releases
 ```
 
-Tags follow the convention `v<upstream-version>-rp<build-number>` (e.g.,
-`v2.1.0-rp1`). Each successful re-derivation produces a new tag.
+You maintain a fork. The maintainer rejected your PR. You want both their fixes
+AND your feature. **Now you can have both.**
 
-### Flags
+## The problem
 
-- `--tag <name>` — update to a specific tag (default: latest)
-- `--dry-run` — show what would happen, don't actually change anything
-- `--skip-install` — skip `bun install` after checkout (useful for testing)
+```
+upstream/main    ─────●─────●─────●─────►  (v1.0.0, v1.1.0, v2.0.0, v2.1.0)
+                               │
+                               └─ your patch: --cheat flag (rejected PR)
+                                  
+your fork       ─────●─────●─────●─────►  (frozen at v2.0.0 + your patch)
+                                  
+gap: v2.1.0 features you don't have
+```
+
+**Today:** choose — official release (lose your patch) or your fork (lose upstream features).
+The pain: every upstream release, manually re-apply, re-fix, re-test.
+
+**With relay-patch:** declare your patch as **intent** ("add --cheat flag, print before banner, don't touch game.ts"). An AI agent re-realizes your intent against every new upstream release. You run `relay-patch update` and get both: your patch + the latest upstream.
+
+## Install
+
+```bash
+npx relay-patch init
+```
+
+Requires [Bun](https://bun.sh) ≥ 1.3 and `git`.
+
+## Quick start
+
+```bash
+# 1. From inside your fork's checkout
+relay-patch init
+
+# 2. In OpenCode, run the slash command to create a patch
+/relay-patch "add --cheat flag to reveal the secret number"
+
+# 3. AI implements on a draft branch. Test it. When happy:
+relay-patch satisfied
+
+# 4. When upstream releases a new version:
+relay-patch update    # consumer-side: advance to latest tag
+relay-patch watch     # daemon-side: auto-detect drift, generate bundles, apply
+```
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `init` | Set up `.relay-patch` repo + config |
+| `draft "<intent>"` | Create a `*` branch + draft INTENT.md |
+| `satisfied` | Finalize intent, capture diff, port to `relay-patch/main`, tag |
+| `import <github-url>` | Import a patch from another user's `.relay-patch` |
+| `re-derive <patch-id>` | Generate context bundle for AI re-derivation |
+| `apply <bundle-path>` | Apply realization from bundle (with verify gate) |
+| `drift-check` | Detect drift (with target_area skip for cost optimization) |
+| `watch [--once] [--interval N]` | Daemon: auto-detect drift + generate bundles + apply |
+| `update [--tag <tag>]` | Consumer: advance to latest tag |
+| `rollback` | Consumer: roll back to previous tag |
+| `status` | Show current state |
 
 ## How it works
 
-The tool is a thin wrapper around git:
+```
+USERNAME/.relay-patch/         # intent repository (intent = truth)
+├── repos/
+│   └── github.com/owner/repo/
+│       ├── manifest.json
+│       └── patches/
+│           └── <patch-id>/
+│               ├── INTENT.md         # natural language intent
+│               ├── ACCEPTANCE.md     # verification criteria
+│               ├── reference.diff    # last successful realization (evidence)
+│               ├── verify.sh         # runnable verification script
+│               └── attempts.jsonl    # history (learn from failures)
+└── watch-state.json
 
-1. `relay-patch update` fetches the latest tags, finds the most recent
-   `v*-rp*`, stashes any local changes, checks out that tag, and runs
-   `bun install`.
-2. `relay-patch rollback` does the same but for the previous tag in the
-   semver-sorted list.
+USER/repo/                       # your fork
+├── main                          # tracks upstream
+├── relay-patch/main              # built artifact, force-pushed
+└── *                             # draft branch (per patch)
+```
 
-The force-push rebuild model for `relay-patch/main` means raw `git pull`
-would break. The CLI is the only safe way to advance.
+The core invariant: **intent is truth, diffs are evidence.** When upstream
+releases v2.1.0, the reference.diff goes stale. The AI re-reads INTENT.md and
+re-realizes against new upstream. Same intent, fresh implementation.
 
-## For developers
+## Why this works
 
-The design is in `_local/`:
-- `2026-06-14-v2.md` — full design (state machine, repo layout, AI contract)
-- `2026-06-14-dry-run-findings.md` — initial dry-run results
-- `2026-06-14-cold-start-test.md` — single-patch drift validation
-- `2026-06-14-multi-patch-test.md` — sibling awareness validation
-- `2026-06-14-drift-siblings-test.md` — drift-with-siblings validation
-- `2026-06-14-cli-prototype.md` — CLI prototype results (this iteration)
+- **Intent survives drift.** A good INTENT.md is a specification, not a diff.
+  Re-deriving from intent gives the AI freedom to adapt.
+- **Drift detection is cheap.** `git log <last_realized>..<upstream> -- <target_area>`
+  tells you if the relevant area changed. Most updates touch nothing important.
+- **Verification is mandatory.** Each patch has a `verify.sh` runnable on apply.
+  Failed verification = no auto-promote.
+- **Sibling awareness.** When re-deriving patch B, the AI sees patch A's realization
+  in the bundle and preserves it.
 
-A live demo of the full flow lives in:
-- Upstream: https://github.com/ImBIos/guess-my-number
-- Dry-run fork and intent repo: `/home/imbios/dev/projects/dry-run/`
+## Re-using patches
+
+Anyone can publish patches by making their `.relay-patch` public. Import
+someone's:
+
+```bash
+relay-patch import https://github.com/ALICE/.relay-patch/blob/main/repos/\
+github.com/owner/repo/patches/<patch-id>/INTENT.md
+```
+
+The patch is copied with author attribution. Re-derivation adapts it to your
+fork's current state.
+
+## The watch daemon
+
+```bash
+relay-patch watch --interval 300  # check every 5 minutes
+```
+
+Loops:
+1. Detect drift (per-patch target_area check, skip if untouched)
+2. Generate context bundle for drifted patches
+3. Wait for AI to produce REALIZATION/realization.diff
+4. Apply with verify gate
+5. Tag
+
+Run with `--once` for cron/CI. Without it, the daemon loops with sleep.
+
+## Validated by 5 cold-start LLM tests
+
+Single-patch drift, multi-patch sibling awareness, drift-with-siblings sequential
+re-derivation, CLI consumer prototype, producer-side commands. All documented in
+`_local/`.
 
 ## Development
 
@@ -80,3 +148,7 @@ A live demo of the full flow lives in:
 pnpm install
 bun run src/cli.ts status
 ```
+
+## License
+
+MIT

@@ -1,6 +1,7 @@
 {
   "name": "relay-patch",
   "version": "0.1.0",
+  "description": "Keep up-to-date upstream + your custom patches. Patches are intent, not diffs.",
   "module": "src/cli.ts",
   "type": "module",
   "bin": {
@@ -8,10 +9,38 @@
   },
   "scripts": {
     "start": "bun run src/cli.ts",
+    "init": "bun run src/cli.ts init",
+    "draft": "bun run src/cli.ts draft",
+    "satisfied": "bun run src/cli.ts satisfied",
+    "import": "bun run src/cli.ts import",
+    "re-derive": "bun run src/cli.ts re-derive",
+    "apply": "bun run src/cli.ts apply",
+    "drift-check": "bun run src/cli.ts drift-check",
+    "watch": "bun run src/cli.ts watch",
     "update": "bun run src/cli.ts update",
     "rollback": "bun run src/cli.ts rollback",
     "status": "bun run src/cli.ts status"
   },
+  "keywords": [
+    "git",
+    "fork",
+    "patch",
+    "ai",
+    "opencode",
+    "intent",
+    "upstream",
+    "rebase",
+    "merge"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ImBIOS/relay-patch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ImBIOS/relay-patch/issues"
+  },
+  "homepage": "https://github.com/ImBIOS/relay-patch#readme",
   "devDependencies": {
     "@types/bun": "latest"
   },
