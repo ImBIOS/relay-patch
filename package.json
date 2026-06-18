@@ -1,11 +1,24 @@
 {
   "name": "relay-patch",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "Keep up-to-date upstream + your custom patches. Patches are intent, not diffs.",
   "module": "src/cli.ts",
   "type": "module",
   "bin": {
     "relay-patch": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "index.ts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "Dockerfile",
+    "test-orchestrator.sh",
+    ".opencode"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
   },
   "scripts": {
     "start": "bun run src/cli.ts",
@@ -13,13 +26,15 @@
     "draft": "bun run src/cli.ts draft",
     "satisfied": "bun run src/cli.ts satisfied",
     "import": "bun run src/cli.ts import",
+    "search": "bun run src/cli.ts search",
     "re-derive": "bun run src/cli.ts re-derive",
     "apply": "bun run src/cli.ts apply",
     "drift-check": "bun run src/cli.ts drift-check",
     "watch": "bun run src/cli.ts watch",
     "update": "bun run src/cli.ts update",
     "rollback": "bun run src/cli.ts rollback",
-    "status": "bun run src/cli.ts status"
+    "status": "bun run src/cli.ts status",
+    "prepublishOnly": "bunx tsc --noEmit"
   },
   "keywords": [
     "git",
@@ -41,6 +56,10 @@
     "url": "https://github.com/ImBIOS/relay-patch/issues"
   },
   "homepage": "https://github.com/ImBIOS/relay-patch#readme",
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

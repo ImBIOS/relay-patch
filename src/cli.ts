@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { runUpdate, type UpdateOptions } from "./update";
 import { runRollback } from "./rollback";
 import { runInit } from "./init";
