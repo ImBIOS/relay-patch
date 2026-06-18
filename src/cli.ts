@@ -8,6 +8,7 @@ import { runImport } from "./import";
 import { runReDerive } from "./re-derive";
 import { runApply } from "./apply";
 import { runWatch } from "./watch";
+import { runSearch, formatSearchResults } from "./search";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
@@ -16,10 +17,12 @@ Usage:
   relay-patch draft "<intent>"                    Create a draft branch for a new patch
   relay-patch satisfied [--skip-port]             Finalize intent, port to relay-patch/main
   relay-patch import <url> [--force]              Import a patch from another user's .relay-patch
+  relay-patch search [query] [--target <repo>]     Search GitHub for patches
   relay-patch re-derive <patch-id> [--force]      Generate re-derivation context bundle
   relay-patch apply <bundle-path>                 Apply realization from context bundle
   relay-patch drift-check                         Check if patches need re-derivation
-  relay-patch watch [--once] [--interval <sec>]   Daemon: auto-detect drift + generate bundles
+  relay-patch watch [--once] [--interval <sec>] [--agent <name>]
+                                                  Daemon: auto-detect drift + generate bundles
   relay-patch update [--tag <tag>] [--dry-run]    Update to latest (or specified) tag
   relay-patch rollback                            Roll back to the previous tag
   relay-patch status                              Show current state
@@ -185,10 +188,23 @@ async function main() {
         break;
       }
 
+      case "search": {
+        const searchOpts: { targetRepo?: string; author?: string; query?: string; limit?: number } = {};
+        if (typeof opts.target === "string") searchOpts.targetRepo = opts.target;
+        if (typeof opts.author === "string") searchOpts.author = opts.author;
+        if (typeof opts.limit === "string") searchOpts.limit = parseInt(opts.limit, 10);
+        if (positional.length > 0) searchOpts.query = positional.join(" ");
+
+        const results = await runSearch(searchOpts);
+        console.log(formatSearchResults(results));
+        break;
+      }
+
       case "watch": {
-        const watchOpts: { once?: boolean; interval?: number } = {};
+        const watchOpts: { once?: boolean; interval?: number; agent?: string } = {};
         if (opts.once === true) watchOpts.once = true;
         if (typeof opts.interval === "string") watchOpts.interval = parseInt(opts.interval, 10);
+        if (typeof opts.agent === "string") watchOpts.agent = opts.agent;
         await runWatch(watchOpts);
         break;
       }

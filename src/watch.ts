@@ -7,6 +7,7 @@ export type WatchOptions = {
   relayPatchDir?: string;
   once?: boolean;
   interval?: number;
+  agent?: string;
 };
 
 type WatchBundle = {
@@ -55,6 +56,64 @@ async function applyBundle(bundlePath: string, relayPatchDir: string): Promise<{
   }
 }
 
+type AgentCommand = {
+  command: string;
+  argsForBundle: (bundlePath: string, promptPath: string) => string[];
+};
+
+const AGENTS: Record<string, AgentCommand> = {
+  opencode: {
+    command: "opencode",
+    argsForBundle: (bundlePath, promptPath) => [
+      "--prompt", promptPath,
+      "--output", `${bundlePath}/REALIZATION/`,
+    ],
+  },
+  "claude-code": {
+    command: "claude",
+    argsForBundle: (bundlePath, promptPath) => [
+      "--file", promptPath,
+    ],
+  },
+};
+
+async function invokeAgent(agentName: string, bundlePath: string, patchId: string): Promise<void> {
+  const agent = AGENTS[agentName];
+  if (!agent) {
+    console.error(`\n✗ Unknown agent: ${agentName}. Available: ${Object.keys(AGENTS).join(", ")}`);
+    return;
+  }
+
+  const promptPath = `${bundlePath}/prompt.md`;
+  const realizationPath = `${bundlePath}/REALIZATION/realization.diff`;
+
+  console.log(`\n🤖 Invoking ${agentName} on bundle for ${patchId}...`);
+
+  try {
+    const proc = Bun.spawn([agent.command, ...agent.argsForBundle(bundlePath, promptPath)], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const exitCode = await proc.exited;
+    if (exitCode === 0) {
+      const fs = await import("node:fs");
+      if (fs.existsSync(realizationPath)) {
+        console.log(`✅ ${agentName} produced realization`);
+      } else {
+        console.log(`⚠ ${agentName} exited 0 but no realization.diff was produced`);
+      }
+    } else {
+      console.error(`✗ ${agentName} failed (exit ${exitCode}): ${stderr.slice(0, 200)}`);
+    }
+  } catch (err) {
+    console.error(`✗ Could not invoke ${agentName}: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
 export async function runWatch(options: WatchOptions = {}): Promise<void> {
   if (!(await isGitRepo())) {
     throw new Error("Not a git repository. Run from inside your fork's checkout.");
@@ -66,6 +125,7 @@ export async function runWatch(options: WatchOptions = {}): Promise<void> {
   }
 
   const intervalMs = (options.interval ?? 300) * 1000;
+  const agent = options.agent;
   let iteration = 0;
 
   do {
@@ -106,6 +166,10 @@ export async function runWatch(options: WatchOptions = {}): Promise<void> {
             });
             console.log(`\n📦 Bundle generated for ${patch.patchId}`);
             console.log(`   ${bundleResult.bundlePath}`);
+
+            if (agent) {
+              await invokeAgent(agent, bundleResult.bundlePath, patch.patchId);
+            }
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
