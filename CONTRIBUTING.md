@@ -62,6 +62,31 @@ src/
 3. Run `bunx tsc --noEmit` and the Docker test
 4. Submit a PR with a clear description
 
+## Release process
+
+Releases are triggered by pushing a tag. The GitHub Actions workflow in
+`.github/workflows/publish.yml` handles publishing.
+
+```bash
+# Bump version in package.json
+# Commit the change
+git tag v0.2.3
+git push origin v0.2.3
+# Workflow runs: npm publish (with provenance) + GitHub Packages + GitHub Release
+```
+
+### First release / trusted publishing setup
+
+For provenance to work from CI, you need to set up **npm trusted publishing**:
+
+1. First publish manually once: `npm login` then `npm publish --provenance`
+2. Go to https://www.npmjs.com/package/relay-patch → Settings → Trusted publishing
+3. Add a trusted publisher:
+   - Provider: GitHub Actions
+   - Repository: `ImBIOS/relay-patch`
+   - Workflow filename: `publish.yml`
+4. Future releases will publish from CI with provenance automatically
+
 ## Questions
 
 Open an issue or discussion on GitHub.
