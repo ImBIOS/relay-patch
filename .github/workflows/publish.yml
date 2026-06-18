@@ -59,8 +59,7 @@ jobs:
           pnpm publish \
             --provenance \
             --access public \
-            --registry "https://npm.pkg.github.com" \
-            --auth-token "${{ secrets.GITHUB_TOKEN }}"
+            --registry "https://npm.pkg.github.com"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -36,7 +36,7 @@
     "update": "bun run src/cli.ts update",
     "rollback": "bun run src/cli.ts rollback",
     "status": "bun run src/cli.ts status",
-    "prepublishOnly": "bunx tsc --noEmit"
+    "prepublishOnly": "tsc --noEmit"
   },
   "keywords": [
     "git",
