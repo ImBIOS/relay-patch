@@ -5,9 +5,10 @@
   "module": "src/cli.ts",
   "type": "module",
   "bin": {
-    "relay-patch": "./src/cli.ts"
+    "relay-patch": "./bin/relay-patch.js"
   },
   "files": [
+    "bin",
     "src",
     "index.ts",
     "README.md",
