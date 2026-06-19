@@ -23,7 +23,6 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-          package-manager-cache: false # never use caching in release builds
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -41,19 +40,12 @@ jobs:
 
   publish-github:
     runs-on: ubuntu-latest
-    continue-on-error: true # Don't block downstream jobs if GitHub Packages fails
     permissions:
       contents: read
       packages: write
-      id-token: write
+      id-token: write # Required for provenance in GitHub Actions
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: "https://npm.pkg.github.com"
-          package-manager-cache: false
 
       - uses: pnpm/action-setup@v6
         with:
@@ -64,7 +56,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Publish to GitHub Packages
-        run: npm publish --access public --provenance=true --no-git-checks
+        run: |
+          pnpm publish \
+            --provenance \
+            --no-git-checks \
+            --access public \
+            --registry "https://npm.pkg.github.com"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -131,7 +128,6 @@ jobs:
   update-homebrew-tap:
     needs: [attach-binaries]
     runs-on: ubuntu-latest
-    if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }} # Skip if secret not configured
     permissions:
       contents: write
     steps:
