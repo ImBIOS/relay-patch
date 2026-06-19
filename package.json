@@ -1,6 +1,6 @@
 {
   "name": "relay-patch",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Keep up-to-date upstream + your custom patches. Patches are intent, not diffs.",
   "module": "src/cli.ts",
   "type": "module",
