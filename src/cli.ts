@@ -11,6 +11,7 @@ import { runApply } from "./apply";
 import { runWatch } from "./watch";
 import { runSearch, formatSearchResults } from "./search";
 import { runPr } from "./pr";
+import { runPublish } from "./publish";
 
 const HELP = `relay-patch — keep up-to-date upstream + your custom patches
 
@@ -19,6 +20,7 @@ Usage:
   relay-patch draft "<intent>"                    Create a draft branch for a new patch
   relay-patch satisfied [--skip-port]             Finalize intent, port to relay-patch/main
   relay-patch pr [--draft] [--base <branch>]      Push current branch + open PR to upstream
+  relay-patch publish [--message <msg>]           Push .relay-patch repo to your public GitHub repo
   relay-patch import <url> [--force]              Import a patch from another user's .relay-patch
   relay-patch search [query] [--target <repo>]    Search GitHub for patches
   relay-patch re-derive <patch-id> [--force]      Generate re-derivation context bundle
@@ -306,6 +308,24 @@ async function main() {
           console.error(`\nYou can still push the branch manually:`);
           console.error(`  git push -u <fork-remote> ${result.branch}`);
           console.error(`Then open the PR at: https://github.com/<owner>/<repo>/compare/${result.branch}`);
+        }
+        break;
+      }
+
+      case "publish": {
+        const pubOpts: { message?: string } = {};
+        if (typeof opts.message === "string") pubOpts.message = opts.message;
+        if (typeof opts.m === "string") pubOpts.message = opts.m;
+
+        const result = await runPublish(pubOpts);
+        if (result.pushed) {
+          console.log(`Pushed:    ${result.commitSha} → ${result.remote}`);
+          console.log(`Files:     ${result.filesStaged} staged`);
+          console.log(`Message:   ${result.commitMessage}`);
+          console.log(`\nPatch intents published. Other users can import via:`);
+          console.log(`  relay-patch import https://github.com/<user>/.relay-patch/...`);
+        } else {
+          console.log(`Nothing to publish. Latest commit: ${result.commitSha}`);
         }
         break;
       }

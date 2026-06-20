@@ -13,12 +13,18 @@ export type DriftCheckOptions = {
 
 export type PatchDriftStatus = {
   patchId: string;
-  status: "current" | "drifted" | "unknown";
+  status: "current" | "drifted" | "unknown" | "upstreamed";
   lastRealizedSha: string;
   targetArea: string[];
   upstreamChanged: boolean;
   targetAreaChanged: boolean;
   filesChangedInTargetArea: string[];
+  appliedUpstreamPr?: {
+    number: number;
+    url: string;
+    state: "open" | "merged" | "closed";
+    mergeCommit?: string;
+  } | null;
 };
 
 export type DriftCheckResult = {
@@ -96,6 +102,38 @@ async function findTargetRepo(relayPatchDir: string, forkCwd: string): Promise<s
   throw new Error("Could not determine target repo from .relay-patch.");
 }
 
+/**
+ * Check the state of an upstream PR via `gh pr view`.
+ * Returns the PR state (open/merged/closed) and merge commit SHA if merged.
+ * On failure (gh not installed, no auth, network), returns null — callers
+ * should not block drift-check just because PR tracking is unavailable.
+ */
+async function checkUpstreamPrState(
+  targetRepo: string,
+  prNumber: number,
+): Promise<{ state: "open" | "merged" | "closed"; mergeCommit?: string } | null> {
+  const result = await gitExec([
+    "pr", "view", String(prNumber),
+    "--repo", targetRepo,
+    "--json", "state,mergeCommit",
+  ]);
+  if (result.exitCode !== 0) return null;
+  try {
+    const data = JSON.parse(result.stdout);
+    const rawState = data.state?.toUpperCase();
+    // gh returns "OPEN", "MERGED", "CLOSED" — normalize
+    if (rawState === "MERGED") {
+      return { state: "merged", mergeCommit: data.mergeCommit?.oid };
+    }
+    if (rawState === "CLOSED") {
+      return { state: "closed" };
+    }
+    return { state: "open" };
+  } catch {
+    return null;
+  }
+}
+
 export async function runDriftCheck(options: DriftCheckOptions = {}): Promise<DriftCheckResult> {
   if (!(await isGitRepo())) {
     throw new Error("Not a git repository. Run from inside your fork's checkout.");
@@ -125,44 +163,72 @@ export async function runDriftCheck(options: DriftCheckOptions = {}): Promise<Dr
 
   const patchIds = Object.keys(manifest.patches || {});
   const patchStatuses: PatchDriftStatus[] = [];
+  let manifestDirty = false;
 
   for (const patchId of patchIds) {
     const patchInfo = manifest.patches[patchId];
     const lastRealizedSha = patchInfo.last_realized_against_commit;
     const targetArea = readIntentTargetArea(repoDir, patchId);
+    const appliedPr = patchInfo.applied_upstream_pr;
 
     let status: PatchDriftStatus["status"] = "unknown";
     let upstreamChanged = false;
     let targetAreaChanged = false;
     let filesChangedInTargetArea: string[] = [];
+    let prInfo: PatchDriftStatus["appliedUpstreamPr"] = null;
 
-    if (!lastRealizedSha) {
-      status = "drifted";
-      upstreamChanged = true;
-      targetAreaChanged = true;
-      filesChangedInTargetArea = ["(imported — needs first realization)"];
-    } else if (shortSha(lastRealizedSha) === shortSha(upstreamSha)) {
-      status = "current";
-    } else {
-      upstreamChanged = true;
-      if (targetArea.length > 0) {
-        const areaArgs = targetArea.flatMap((a) => ["--", a]);
-        const diffResult = await gitExec([
-          "diff", "--name-only", `${lastRealizedSha}..${upstreamSha}`, ...areaArgs,
-        ]);
-        filesChangedInTargetArea = diffResult.stdout
-          ? diffResult.stdout.split("\n").filter(Boolean)
-          : [];
+    // Check upstream PR state if tracked. If merged → UPSTREAMED.
+    // If closed (not merged) → NEEDS_HUMAN (surface to user).
+    if (appliedPr?.number) {
+      const prState = await checkUpstreamPrState(targetRepo, appliedPr.number);
+      if (prState) {
+        prInfo = {
+          number: appliedPr.number,
+          url: appliedPr.url ?? `https://github.com/${targetRepo}/pull/${appliedPr.number}`,
+          state: prState.state,
+          mergeCommit: prState.mergeCommit,
+        };
+        if (prState.state === "merged") {
+          status = "upstreamed";
+          // If we have the merge commit, advance last_realized to it so the
+          // next drift cycle starts from the post-merge state.
+          if (prState.mergeCommit) {
+            patchInfo.last_realized_against_commit = shortSha(prState.mergeCommit);
+            manifestDirty = true;
+          }
+        }
+      }
+    }
 
-        if (filesChangedInTargetArea.length > 0) {
+    if (status !== "upstreamed") {
+      if (!lastRealizedSha) {
+        status = "drifted";
+        upstreamChanged = true;
+        targetAreaChanged = true;
+        filesChangedInTargetArea = ["(imported — needs first realization)"];
+      } else if (shortSha(lastRealizedSha) === shortSha(upstreamSha)) {
+        status = "current";
+      } else {
+        upstreamChanged = true;
+        if (targetArea.length > 0) {
+          const areaArgs = targetArea.flatMap((a) => ["--", a]);
+          const diffResult = await gitExec([
+            "diff", "--name-only", `${lastRealizedSha}..${upstreamSha}`, ...areaArgs,
+          ]);
+          filesChangedInTargetArea = diffResult.stdout
+            ? diffResult.stdout.split("\n").filter(Boolean)
+            : [];
+
+          if (filesChangedInTargetArea.length > 0) {
+            status = "drifted";
+            targetAreaChanged = true;
+          } else {
+            status = "current";
+          }
+        } else {
           status = "drifted";
           targetAreaChanged = true;
-        } else {
-          status = "current";
         }
-      } else {
-        status = "drifted";
-        targetAreaChanged = true;
       }
     }
 
@@ -174,7 +240,14 @@ export async function runDriftCheck(options: DriftCheckOptions = {}): Promise<Dr
       upstreamChanged,
       targetAreaChanged,
       filesChangedInTargetArea,
+      appliedUpstreamPr: prInfo,
     });
+  }
+
+  // Persist manifest updates (e.g. advanced last_realized on UPSTREAMED)
+  if (manifestDirty) {
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(join(repoDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   }
 
   const summary = {
@@ -205,11 +278,18 @@ export function formatDriftCheckResult(result: DriftCheckResult): string {
   }
 
   for (const patch of result.patches) {
-    const icon = patch.status === "current" ? "✓" : patch.status === "drifted" ? "⚠" : "?";
+    const icon = patch.status === "current" ? "✓" : patch.status === "drifted" ? "⚠" : patch.status === "upstreamed" ? "✓" : "?";
     lines.push(`${icon} ${patch.patchId}`);
     lines.push(`   status:     ${patch.status}`);
     lines.push(`   realized:   ${patch.lastRealizedSha ? shortSha(patch.lastRealizedSha) : "(not yet realized)"}`);
     lines.push(`   target_area: [${patch.targetArea.join(", ")}]`);
+
+    // Show upstream PR tracking info
+    if (patch.appliedUpstreamPr) {
+      const prState = patch.appliedUpstreamPr.state;
+      const prIcon = prState === "merged" ? "✓ merged" : prState === "open" ? "⏳ open" : "✗ closed";
+      lines.push(`   upstream PR: #${patch.appliedUpstreamPr.number} (${prIcon})`);
+    }
 
     if (patch.status === "drifted") {
       lines.push(`   changed:    ${patch.filesChangedInTargetArea.join(", ")}`);
