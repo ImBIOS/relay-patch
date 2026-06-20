@@ -38,7 +38,7 @@ jobs:
         env:
           NPM_CONFIG_PROVENANCE: true
 
-  # Note: GitHub Packages requires scoped packages (@scope/name).
+  # NOTE: GitHub Packages requires scoped packages (@scope/name).
   # relay-patch is unscoped on npm; GitHub Packages is intentionally skipped.
   # To enable: scope package as @imbios/relay-patch and add a publish-github job.
 
@@ -74,7 +74,7 @@ jobs:
           bun build --compile --target=${{ matrix.target }} --minify \
             --outfile=dist/${{ matrix.artifact }} ./src/cli.ts
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.artifact }}
@@ -93,7 +93,7 @@ jobs:
       - name: Compute SHA256SUMS
         run: (cd dist && sha256sum relay-patch-* > SHA256SUMS)
       - name: Attach binaries to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/relay-patch-linux-x64
