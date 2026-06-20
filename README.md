@@ -35,7 +35,7 @@ The pain: every upstream release, manually re-apply, re-fix, re-test.
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew tap ImBIOS/tap
+brew tap ImBIOS/tap https://github.com/ImBIOS/relay-patch
 brew install relay-patch
 ```
 

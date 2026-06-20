@@ -38,32 +38,9 @@ jobs:
         env:
           NPM_CONFIG_PROVENANCE: true
 
-  publish-github:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write # Required for provenance in GitHub Actions
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 11
-          cache: true
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Publish to GitHub Packages
-        run: |
-          pnpm publish \
-            --provenance \
-            --no-git-checks \
-            --access public \
-            --registry "https://npm.pkg.github.com"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Note: GitHub Packages requires scoped packages (@scope/name).
+  # relay-patch is unscoped on npm; GitHub Packages is intentionally skipped.
+  # To enable: scope package as @imbios/relay-patch and add a publish-github job.
 
   build-binaries:
     needs: [publish-npm]
@@ -125,7 +102,7 @@ jobs:
             dist/relay-patch-darwin-arm64
             dist/SHA256SUMS
 
-  update-homebrew-tap:
+  update-homebrew-formula:
     needs: [attach-binaries]
     runs-on: ubuntu-latest
     permissions:
@@ -133,50 +110,82 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          repository: ImBIOS/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: homebrew-tap
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download binaries
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - name: Compute darwin-arm64 SHA256
+      - name: Compute SHA256 for all platforms
         id: sha
         run: |
-          SHA=$(sha256sum dist/relay-patch-darwin-arm64 | awk '{print $1}')
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-      - name: Update formula
+          echo "darwin_arm64=$(sha256sum dist/relay-patch-darwin-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "darwin_x64=$(sha256sum dist/relay-patch-darwin-x64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux_x64=$(sha256sum dist/relay-patch-linux-x64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64=$(sha256sum dist/relay-patch-linux-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Update Formula/relay-patch.rb in this repo
         env:
           VERSION: ${{ github.ref_name }}
-          SHA: ${{ steps.sha.outputs.sha }}
+          DARWIN_ARM64: ${{ steps.sha.outputs.darwin_arm64 }}
+          DARWIN_X64: ${{ steps.sha.outputs.darwin_x64 }}
+          LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
+          LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
         run: |
-          mkdir -p homebrew-tap/Formula
-          cat > homebrew-tap/Formula/relay-patch.rb <<EOF
+          mkdir -p Formula
+          cat > Formula/relay-patch.rb <<EOF
+          # typed: false
+          # frozen_string_literal: true
+
           class RelayPatch < Formula
             desc "Keep up-to-date upstream + your custom patches. Patches are intent, not diffs."
             homepage "https://github.com/ImBIOS/relay-patch"
-            url "https://github.com/ImBIOS/relay-patch/releases/download/${VERSION}/relay-patch-darwin-arm64"
             version "${VERSION#v}"
-            sha256 "${SHA}"
             license "MIT"
 
-            depends_on arch: :arm64
+            on_macos do
+              on_intel do
+                url "https://github.com/ImBIOS/relay-patch/releases/download/${VERSION}/relay-patch-darwin-x64"
+                sha256 "${DARWIN_X64}"
+              end
+              on_arm do
+                url "https://github.com/ImBIOS/relay-patch/releases/download/${VERSION}/relay-patch-darwin-arm64"
+                sha256 "${DARWIN_ARM64}"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "https://github.com/ImBIOS/relay-patch/releases/download/${VERSION}/relay-patch-linux-x64"
+                sha256 "${LINUX_X64}"
+              end
+              on_arm do
+                url "https://github.com/ImBIOS/relay-patch/releases/download/${VERSION}/relay-patch-linux-arm64"
+                sha256 "${LINUX_ARM64}"
+              end
+            end
 
             def install
-              bin.install "relay-patch-darwin-arm64" => "relay-patch"
+              os_arch = if OS.mac? && Hardware::CPU.arm?
+                "darwin-arm64"
+              elsif OS.mac?
+                "darwin-x64"
+              elsif Hardware::CPU.arm?
+                "linux-arm64"
+              else
+                "linux-x64"
+              end
+              bin.install "relay-patch-\#{os_arch}" => "relay-patch"
             end
 
             test do
-              assert_match "relay-patch —", shell_output("#{bin}/relay-patch --help")
+              assert_match "relay-patch", shell_output("#{bin}/relay-patch --help")
             end
           end
           EOF
-      - name: Commit and push
-        working-directory: homebrew-tap
+      - name: Commit formula
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/relay-patch.rb
-          git commit -m "relay-patch ${VERSION}" || echo "No changes to commit"
+          git commit -m "chore: update homebrew formula to ${VERSION}" || echo "No changes to commit"
           git push
