@@ -110,6 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download binaries
         uses: actions/download-artifact@v4
