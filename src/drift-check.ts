@@ -112,16 +112,26 @@ async function checkUpstreamPrState(
   targetRepo: string,
   prNumber: number,
 ): Promise<{ state: "open" | "merged" | "closed"; mergeCommit?: string } | null> {
-  const result = await gitExec([
-    "pr", "view", String(prNumber),
+  // Use gh CLI (not git) to query PR state
+  const proc = Bun.spawn(["gh", "pr", "view", String(prNumber),
     "--repo", targetRepo,
     "--json", "state,mergeCommit",
+  ], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
   ]);
-  if (result.exitCode !== 0) return null;
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    // gh not installed, no auth, or PR not found — don't block
+    return null;
+  }
   try {
-    const data = JSON.parse(result.stdout);
+    const data = JSON.parse(stdout.trim());
     const rawState = data.state?.toUpperCase();
-    // gh returns "OPEN", "MERGED", "CLOSED" — normalize
     if (rawState === "MERGED") {
       return { state: "merged", mergeCommit: data.mergeCommit?.oid };
     }
