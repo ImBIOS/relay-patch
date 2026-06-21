@@ -4,28 +4,28 @@
 class RelayPatch < Formula
   desc "Keep up-to-date upstream + your custom patches. Patches are intent, not diffs."
   homepage "https://github.com/ImBIOS/relay-patch"
-  version "0.2.9"
+  version "0.2.10"
   license "MIT"
 
   on_macos do
     on_intel do
-      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.9/relay-patch-darwin-x64"
-      sha256 "a50920d120ce069d409f13f159fad110c95c111b0d468042244a80367835000c"
+      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.10/relay-patch-darwin-x64"
+      sha256 "c47b136c47a8865757ceff381598790bb8d2e7ac4ca1801d807914b7bdd53540"
     end
     on_arm do
-      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.9/relay-patch-darwin-arm64"
-      sha256 "4527fe808c62822b089b38006e03756a49df31003e6c247c0acfcb8d8669b53a"
+      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.10/relay-patch-darwin-arm64"
+      sha256 "8b5f132acaeee3971c37379a6962cf5796974a58bd78d6a2c24c5409108baff3"
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.9/relay-patch-linux-x64"
-      sha256 "76d9e377b8552f7e50b03997e0cfa7b301783a72af7c241e832af2572318264e"
+      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.10/relay-patch-linux-x64"
+      sha256 "c1da45726c630756c952ee4a754c1b9e8fd79962b310a65de2a5f87bf7ca1ddb"
     end
     on_arm do
-      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.9/relay-patch-linux-arm64"
-      sha256 "3a0ac34686b60643b502bd1a8e2634b0c86fab8e1b8266704efa861e6cd89312"
+      url "https://github.com/ImBIOS/relay-patch/releases/download/v0.2.10/relay-patch-linux-arm64"
+      sha256 "fe5a3e74fb9e6bb89c9776ce9102542d4539b6436943f9c994bcfa420355ac8a"
     end
   end
 
