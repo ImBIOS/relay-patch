@@ -44,10 +44,10 @@ function parseArgs(argv: string[]): { command?: string; opts: Record<string, str
   const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
-    if (arg && arg.startsWith("--")) {
-      const key = arg.slice(2);
+    if (arg && (arg.startsWith("--") || (arg.startsWith("-") && arg.length > 1 && !/^-?\d/.test(arg)))) {
+      const key = arg.slice(arg.startsWith("--") ? 2 : 1);
       const next = rest[i + 1];
-      if (next && !next.startsWith("--")) {
+      if (next && !next.startsWith("-")) {
         opts[key] = next;
         i++;
       } else {

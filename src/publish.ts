@@ -66,7 +66,7 @@ export async function runPublish(options: PublishOptions = {}): Promise<PublishR
   const message =
     options.message ??
     `chore: sync patches (${new Date().toISOString().split("T")[0]})`;
-  await gitOrThrow(["commit", "-m", message, "--allow-empty=false"], relayPatchDir);
+  await gitOrThrow(["commit", "-m", message, "--no-allow-empty"], relayPatchDir);
 
   // Push
   const branchResult = await gitExec(["rev-parse", "--abbrev-ref", "HEAD"], relayPatchDir);
